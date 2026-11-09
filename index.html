@@ -3162,6 +3162,66 @@ input,select,textarea{border-radius:11px!important;border-color:#d9e2eb!importan
 </div>
 <button class="btn light page-back" onclick="show('home')">← Kembali</button>
 </section>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script id="firebase-plsv-cloud-first-storage">
+(function(){
+ 'use strict';
+ const firebaseConfig={apiKey:"AIzaSyB5x1LSHF-Bz6pzFQtSl0cOZrDNJALSzWY",authDomain:"escape-room-plsv-a6c68.firebaseapp.com",databaseURL:"https://escape-room-plsv-a6c68-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"escape-room-plsv-a6c68",storageBucket:"escape-room-plsv-a6c68.firebasestorage.app",messagingSenderId:"642744458259",appId:"1:642744458259:web:f4331e04f7d702ac44b3e6",measurementId:"G-WC6SWYXGPP"};
+ const storage=window.localStorage;
+ const native={get:Storage.prototype.getItem,set:Storage.prototype.setItem,remove:Storage.prototype.removeItem,clear:Storage.prototype.clear,key:Storage.prototype.key,length:Object.getOwnPropertyDescriptor(Storage.prototype,'length')?.get};
+ const memory=new Map(), touched=new Set();
+ let db=null,cloudReady=false,applyingRemote=false,pending=Promise.resolve();
+ // Read existing browser data once into RAM only for migration; never write to localStorage.
+ try{for(let i=0;i<(native.length?.call(storage)||0);i++){const k=native.key.call(storage,i);if(k!==null){const v=native.get.call(storage,k);if(v!==null && String(k)!=='plsvAccounts' && String(k)!=='plsvCurrentAccountEmail')memory.set(String(k),String(v));}}}catch(e){console.warn('[Firebase PLSV] local migration read',e);}
+ const encodeKey=k=>'k_'+Array.from(new TextEncoder().encode(String(k))).map(b=>b.toString(16).padStart(2,'0')).join('');
+ const decodeKey=id=>{try{return new TextDecoder().decode(new Uint8Array(String(id).replace(/^k_/,'').match(/.{2}/g).map(h=>parseInt(h,16))));}catch(e){return null;}};
+ function status(s){window.firebasePLSVSyncStatus=s;document.documentElement.dataset.firebaseStorage=s;const el=document.getElementById('firebaseStorageStatus');if(el)el.textContent=s==='connected'?'Penyimpanan Online Firebase Aktif':s==='connecting'?'Menghubungkan ke Firebase…':s==='error'?'Firebase tidak terhubung — data belum tersinkron':s==='auth-required'?'Silakan login untuk mengaktifkan penyimpanan online':'Menyiapkan penyimpanan online…';}
+ function fail(e){
+  console.error('[Firebase PLSV cloud storage]',e);
+  status('error');
+  let gate=document.getElementById('firebaseOnlineRequiredGate');
+  if(!gate){
+   gate=document.createElement('div');gate.id='firebaseOnlineRequiredGate';
+   gate.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#111827;color:#fff;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;font:16px/1.6 system-ui,sans-serif;';
+   gate.innerHTML='<div style="max-width:560px"><h2>Game membutuhkan koneksi Firebase</h2><p>Data game tidak disimpan secara lokal. Koneksi atau akses Firebase belum berhasil, sehingga game belum dapat digunakan atau menyimpan hasil.</p><p>Periksa koneksi internet dan aturan Firebase Realtime Database, lalu muat ulang halaman.</p><button onclick="location.reload()" style="padding:12px 20px;border:0;border-radius:8px;font-weight:700;cursor:pointer">Coba lagi</button></div>';
+   document.body.appendChild(gate);
+  }
+ }
+ function setCloud(k,v){if(!db||!cloudReady||applyingRemote)return;const ref=db.ref('appStorage/entries/'+encodeKey(k));pending=pending.then(()=>v===null?ref.remove():ref.set({key:String(k),value:String(v),updatedAt:firebase.database.ServerValue.TIMESTAMP})).catch(fail);}
+ Storage.prototype.getItem=function(k){if(this!==storage)return native.get.call(this,k);k=String(k);return memory.has(k)?memory.get(k):null;};
+ Storage.prototype.setItem=function(k,v){if(this!==storage)return native.set.call(this,k,v);k=String(k);v=String(v);memory.set(k,v);touched.add(k);setCloud(k,v);};
+ Storage.prototype.removeItem=function(k){if(this!==storage)return native.remove.call(this,k);k=String(k);memory.delete(k);touched.add(k);setCloud(k,null);};
+ Storage.prototype.clear=function(){if(this!==storage)return native.clear.call(this);const keys=[...memory.keys()];memory.clear();keys.forEach(k=>{touched.add(k);setCloud(k,null);});};
+ try{Object.defineProperty(Storage.prototype,'length',{configurable:true,get:function(){return this===storage?memory.size:(native.length?.call(this)??0);}});}catch(e){console.warn('[Firebase PLSV] length adapter',e);}
+ Storage.prototype.key=function(i){if(this!==storage)return native.key.call(this,i);return [...memory.keys()][Number(i)]??null;};
+ function refresh(){try{if(typeof window.loadObserverData==='function'&&document.getElementById('observer')?.classList.contains('active'))window.loadObserverData();if(typeof window.renderTeacherReflectionRecap==='function')window.renderTeacherReflectionRecap();if(typeof window.renderTeacherReflectionResults==='function')window.renderTeacherReflectionResults();if(typeof window.renderLeaderboard==='function')window.renderLeaderboard();if(typeof window.updateLeaderboard==='function')window.updateLeaderboard();}catch(e){console.warn('[Firebase PLSV] refresh view',e);}}
+ async function init(){status('connecting');if(!window.firebase)throw new Error('Firebase SDK tidak termuat; perlu koneksi internet.');const app=window.firebase.apps.length?window.firebase.app():window.firebase.initializeApp(firebaseConfig);db=app.database();window.firebasePLSVDatabase=db;window.firebasePLSVAuth=app.auth();status('auth-required');window.firebasePLSVCloudFirst=true;return true;}
+ window.firebasePLSVActivateCloudStorage=async function(){
+  if(cloudReady)return true;
+  if(!window.firebasePLSVAuth||!window.firebasePLSVAuth.currentUser)throw new Error('Harus login Firebase Authentication terlebih dahulu.');
+  status('connecting');
+  const entries=db.ref('appStorage/entries');
+  const snap=await entries.once('value'),cloud=snap.val()||{};let legacy={};try{legacy=(await db.ref('sharedStorage').once('value')).val()||{};}catch(legacyReadError){console.warn('[Firebase PLSV] Legacy sharedStorage tidak dibaca (mungkin rules membatasi); melanjutkan data appStorage.',legacyReadError);}const resolved=new Map();
+  Object.values(cloud).forEach(item=>{if(item&&typeof item.key==='string'&&item.value!==undefined)resolved.set(item.key,String(item.value));});
+  Object.entries(legacy).forEach(([k,v])=>{if(!resolved.has(k)&&v!==null&&v!==undefined)resolved.set(k,String(v));});
+  // Cloud wins for existing keys. Local RAM (including early app writes) only migrates missing cloud keys.
+  const migration=[];for(const [k,v] of memory.entries()){if(!resolved.has(k)){resolved.set(k,String(v));migration.push([k,String(v)]);}}
+  for(const [k,v] of resolved.entries()){memory.set(k,String(v));if(!cloud[encodeKey(k)])migration.push([k,String(v)]);}
+  const dedup=new Map(migration);await Promise.all([...dedup.entries()].map(([k,v])=>entries.child(encodeKey(k)).transaction(cur=>cur===null?{key:k,value:v,updatedAt:firebase.database.ServerValue.TIMESTAMP}:cur,undefined,false)));
+  cloudReady=true;
+  // Clear old browser persistence only after cloud snapshot and migration transactions succeeded.
+  native.clear.call(storage);
+  entries.on('child_added',snap=>{const item=snap.val();if(!item||typeof item.key!=='string'||item.value===undefined)return;applyingRemote=true;try{memory.set(item.key,String(item.value));}finally{applyingRemote=false;}refresh();},fail);
+  entries.on('child_changed',snap=>{const item=snap.val();if(!item||typeof item.key!=='string'||item.value===undefined)return;applyingRemote=true;try{memory.set(item.key,String(item.value));}finally{applyingRemote=false;}refresh();},fail);
+  entries.on('child_removed',snap=>{const item=snap.val();const k=item&&typeof item.key==='string'?item.key:decodeKey(snap.key);if(k){applyingRemote=true;try{memory.delete(k);}finally{applyingRemote=false;}refresh();}},fail);
+  status('connected');window.firebasePLSVCloudFirst=true;console.info('[Firebase PLSV] Firebase Realtime Database is the only persistent store. Browser localStorage is not used for ongoing app data.');refresh();
+  return true;
+ };
+ window.firebasePLSVReady=init().catch(fail);
+})();
+</script>
 <script>
 const questions = [
   {
@@ -3308,13 +3368,8 @@ function previewAccountType(){
   const classInput=document.getElementById('class');
   const confirmInput=document.getElementById('confirmPassword');
   const confirmGroup=confirmInput?.closest('.form-group');
-  let existing=null;
-  try{
-    if(email){
-      const accounts=JSON.parse(localStorage.getItem('plsvAccounts')||'[]');
-      existing=accounts.find(a=>String(a.email||'').toLowerCase()===email)||null;
-    }
-  }catch(e){existing=null;}
+  // Account existence is verified securely by Firebase Authentication during submit.
+  const existing=null;
   accountRole=role || 'student'; appMode=accountRole;
 
   if(role==='teacher'){
@@ -3371,63 +3426,120 @@ async function submitIdentity(){
   if(!playerName||!playerEmail||!password){alert('Silakan lengkapi Nama Lengkap, Email, dan Password terlebih dahulu.');return;}
   if(password.length<6){alert('Password minimal 6 karakter.');passwordInput?.focus();return;}
   const role=roleFromEmail(playerEmail);
-  if(!role){alert('Format email tidak valid.');emailInput?.focus();return;}
-  accountRole=role;appMode=role;
-
+  if(!role){alert('Format email tidak valid. Gunakan email @student.ac.id untuk siswa atau @teacher.ac.id untuk guru.');emailInput?.focus();return;}
+  if(!window.firebasePLSVReady || !window.firebasePLSVAuth || !window.firebasePLSVDatabase){
+    alert('Firebase belum siap. Pastikan internet aktif dan tunggu status Penyimpanan Online Firebase Aktif.');return;
+  }
   try{
-    const key='plsvAccounts';
-    const accounts=JSON.parse(localStorage.getItem(key)||'[]');
-    const idx=accounts.findIndex(a=>String(a.email||'').toLowerCase()===playerEmail);
-    let accountData=null;
-
-    // Akun lama: login menggunakan email + password yang telah disimpan.
-    if(idx>=0){
-      const acc=accounts[idx];
-      if(acc.role!==role){alert('Email tersebut sudah terdaftar untuk jenis akun lain.');return;}
-      const passwordHash=await hashPassword(password);
-      if(!acc.passwordHash || acc.passwordHash!==passwordHash){alert('Password salah untuk akun tersebut.');passwordInput?.focus();return;}
-      accountData=acc;
-      playerName=acc.name||playerName;
-      playerEmail=acc.email||playerEmail;
-      if(role==='student'){
-        playerNisn='';
-        playerClass=acc.kelas||'';
-        if(nameInput)nameInput.value=playerName;
-        if(emailInput)emailInput.value=playerEmail;
-        const cls=document.getElementById('class');if(cls)cls.value=playerClass;
+    await window.firebasePLSVReady;
+    const auth=window.firebasePLSVAuth;
+    const db=window.firebasePLSVDatabase;
+    let userCredential=null, isNew=false;
+    try{
+      userCredential=await auth.signInWithEmailAndPassword(playerEmail,password);
+    }catch(signInError){
+      const code=signInError?.code||'';
+      if(code==='auth/user-not-found' || code==='auth/invalid-credential' || code==='auth/invalid-login-credentials'){
+        // Teacher accounts must be provisioned by the project owner in Firebase Authentication.
+        // Do not let any visitor self-register a privileged teacher identity from this client.
+        if(role==='teacher'){
+          alert('Akun guru belum terdaftar. Minta administrator membuat akun guru melalui Firebase Console, lalu masuk menggunakan email dan password akun tersebut.');
+          passwordInput?.focus();return;
+        }
+        if(!confirmPassword){alert('Akun belum ditemukan. Untuk membuat akun baru, isi Konfirmasi Password.');confirmInput?.focus();return;}
+        if(password!==confirmPassword){alert('Konfirmasi Password tidak sama dengan Password.');confirmInput?.focus();return;}
+        if(role==='student'){
+          playerClass=document.getElementById('class')?.value||'';
+          if(!playerClass){document.getElementById('studentIdentityFields').style.display='block';alert('Silakan pilih kelas terlebih dahulu.');return;}
+        }
+        userCredential=await auth.createUserWithEmailAndPassword(playerEmail,password);
+        isNew=true;
+      }else if(code==='auth/wrong-password' || code==='auth/invalid-email'){
+        alert('Email atau password tidak sesuai.');passwordInput?.focus();return;
+      }else if(code==='auth/email-already-in-use'){
+        alert('Email sudah terdaftar. Silakan masuk menggunakan password akun tersebut.');passwordInput?.focus();return;
       }else{
-        playerNisn='';playerClass='Guru';
-        if(nameInput)nameInput.value=playerName;
-        if(emailInput)emailInput.value=playerEmail;
+        throw signInError;
       }
-    }else{
-      // Akun baru: wajib konfirmasi password dan, untuk siswa, wajib memilih kelas.
-      if(!confirmPassword){alert('Silakan isi Konfirmasi Password terlebih dahulu.');confirmInput?.focus();return;}
-      if(password!==confirmPassword){alert('Konfirmasi Password tidak sama dengan Password.');confirmInput?.focus();return;}
-      if(role==='student'){
-        playerNisn='';
-        playerClass=document.getElementById('class').value;
-        if(!playerClass){document.getElementById('studentIdentityFields').style.display='block';alert('Silakan pilih kelas terlebih dahulu.');return;}
-      }else{playerNisn='';playerClass='Guru';}
-      const passwordHash=await hashPassword(password);
-      accountData={name:playerName,email:playerEmail,role,passwordHash,nisn:'',kelas:role==='student'?playerClass:''};
-      accounts.push(accountData);
-      localStorage.setItem(key,JSON.stringify(accounts));
     }
+    await window.firebasePLSVActivateCloudStorage();
+    const uid=userCredential.user.uid;
+    // Privileged roles are assigned from a fixed UID allowlist, never from email domain alone.
+    const approvedRoles={
+      'hjmTNtIh6yR2FaJocI3pSrTesZy1':'admin',
+      'TWzPeqm6QURNcmlv6IflEYaG2Un1':'teacher',
+      'Ca4E5DIg35SU1OiRq1IKfrzHkDP2':'teacher'
+    };
+    const approvedRole=approvedRoles[uid]||'student';
+    if(role==='teacher' && approvedRole!=='teacher' && approvedRole!=='admin'){
+      await auth.signOut();
+      alert('Akun guru belum disetujui administrator. Hubungi admin game.');return;
+    }
+    if(role==='student' && approvedRole!=='student'){
+      await auth.signOut();
+      alert('Akun ini memiliki hak akses khusus. Gunakan email sesuai role akun.');return;
+    }
+    role=approvedRole;
+    const profileRef=db.ref('users/'+uid);
+    let profileSnap=await profileRef.once('value');
+    let profile=profileSnap.val();
+    if(isNew){
+      profile={uid,name:playerName,email:playerEmail,role,kelas:role==='student'?playerClass:'',createdAt:firebase.database.ServerValue.TIMESTAMP};
+      await profileRef.set(profile);
+    }else{
+      if(!profile){
+        // Auth account exists but profile is missing: create a minimal profile using validated role.
+        profile={uid,name:playerName,email:playerEmail,role,kelas:role==='student'?(document.getElementById('class')?.value||''):'',createdAt:firebase.database.ServerValue.TIMESTAMP};
+        await profileRef.set(profile);
+      }
+      if(profile.role!==role){await auth.signOut();alert('Jenis akun tidak sesuai dengan email yang digunakan.');return;}
+      playerName=profile.name||playerName;
+      playerEmail=profile.email||playerEmail;
+      if(role==='student'){
+        playerClass=profile.kelas||document.getElementById('class')?.value||'';
+        if(!playerClass){document.getElementById('studentIdentityFields').style.display='block';await auth.signOut();alert('Profil siswa belum memiliki kelas. Silakan pilih kelas dan hubungi guru untuk memperbarui profil.');return;}
+      }else playerClass='Guru';
+    }
+    currentUserAccount=profile;
+    playerNisn='';
 
-    // Pastikan profil akun tersimpan sebelum melanjutkan.
-    currentUserAccount=accountData;
-    localStorage.setItem('plsvCurrentAccountEmail',String(playerEmail||''));
-    if(role==='teacher'){
-      observerUnlocked=true;teacherPinSession='LOCAL';appMode='teacher';show('teacherDashboardChoice');loadObserverTarget();loadObserverData();return;
+    if(role==='teacher'||role==='admin'){
+      observerUnlocked=true;teacherPinSession='FIREBASE_AUTH';appMode='teacher';show('teacherDashboardChoice');loadObserverTarget();loadObserverData();return;
     }
     show('characters');
     document.querySelectorAll('#characters .character').forEach(el=>{const img=el.querySelector('img');if(img)img.src=CHARACTER_DATA[el.dataset.char].src;});
-  }catch(err){alert('Tidak dapat membuat atau memuat akun. Data akun disimpan di browser ini.');}
+  }catch(err){
+    console.error('[Firebase Authentication]',err);
+    const code=err?.code||'';
+    if(code==='auth/email-already-in-use')alert('Email sudah digunakan. Silakan login.');
+    else if(code==='auth/weak-password')alert('Password terlalu lemah. Gunakan minimal 6 karakter.');
+    else if(code==='auth/network-request-failed')alert('Tidak ada koneksi internet. Akun tidak dapat diproses.');
+    else alert('Autentikasi Firebase gagal: '+(err?.message||'Periksa koneksi dan konfigurasi Firebase.'));
+  }
 }
 function startParticipantMode(){startStudentAccount();}
 function startObserverMode(){startTeacherAccount();}
-function logoutRole(){observerUnlocked=false;teacherPinSession='';appMode='student';accountRole='student';currentUserAccount=null;show('home');}
+async function logoutRole(){
+  const auth=window.firebasePLSVAuth;
+  try{
+    if(auth && auth.currentUser){
+      await auth.signOut();
+    }
+    observerUnlocked=false;
+    teacherPinSession='';
+    appMode='student';
+    accountRole='student';
+    currentUserAccount=null;
+    playerEmail='';
+    playerName='';
+    playerClass='';
+    playerNisn='';
+    show('home');
+  }catch(err){
+    console.error('[Firebase Authentication] Logout failed',err);
+    alert('Logout Firebase gagal. Periksa koneksi internet, lalu coba lagi.');
+  }
+}
 let observerRows=[];
 let observerSelectedSessionId='';
 let sessionsCache=[];
@@ -6258,96 +6370,8 @@ function deleteOneTeacherReflection(submittedAt,teacherName){
  alert('Refleksi guru berhasil dihapus.');
 }
 </script>
-<!-- Firebase Realtime Database integration for shared game data -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script id="firebase-plsv-shared-storage-sync">
-(function(){
-  'use strict';
-  const firebaseConfig = {
-    apiKey: "AIzaSyB5x1LSHF6-BzpgFQtSl0cOZrDNJALSzWY",
-    authDomain: "escape-room-plsv-a6c68.firebaseapp.com",
-    databaseURL: "https://escape-room-plsv-a6c68-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "escape-room-plsv-a6c68",
-    storageBucket: "escape-room-plsv-a6c68.firebasestorage.app",
-    messagingSenderId: "642744458259",
-    appId: "1:642744458259:web:f4331e04f7d702ac44b3e6",
-    measurementId: "G-WC6SWYXGPP"
-  };
-  // Only classroom/game results are shared. Login credentials and account records
-  // intentionally remain on each device and are NOT uploaded to the database.
-  const exactSharedKeys = new Set([
-    'plsvSessions', 'plsvActiveSessionId', 'plsvRanking',
-    'plsv_student_reflections', 'plsv_teacher_reflections', 'plsv_game_ratings',
-    'plsvObserverTargetsByClass'
-  ]);
-  const isSharedKey = key => exactSharedKeys.has(String(key)) ||
-    String(key).startsWith('plsvReflectionTarget_');
-  let db = null;
-  let suppressCloud = false;
-  const nativeSetItem = Storage.prototype.setItem;
-  const nativeRemoveItem = Storage.prototype.removeItem;
-  const nativeGetItem = Storage.prototype.getItem;
-  function reportSyncError(error){
-    console.error('[Firebase PLSV] Sinkronisasi gagal:', error);
-    window.firebasePLSVSyncStatus = 'error';
-  }
-  function setCloud(key, value){
-    if(!db || suppressCloud || !isSharedKey(key)) return;
-    db.ref('sharedStorage').child(String(key)).set(String(value)).catch(reportSyncError);
-  }
-  Storage.prototype.setItem = function(key, value){
-    nativeSetItem.call(this, key, value);
-    if(this === window.localStorage) setCloud(key, value);
-  };
-  Storage.prototype.removeItem = function(key){
-    nativeRemoveItem.call(this, key);
-    if(this === window.localStorage && db && !suppressCloud && isSharedKey(key)){
-      db.ref('sharedStorage').child(String(key)).remove().catch(reportSyncError);
-    }
-  };
-  function applyCloudValue(key, value){
-    suppressCloud = true;
-    try {
-      if(value === null || value === undefined) nativeRemoveItem.call(window.localStorage, key);
-      else nativeSetItem.call(window.localStorage, key, String(value));
-    } finally { suppressCloud = false; }
-    // Refresh teacher panels if they are already open.
-    try {
-      if(typeof window.loadObserverData === 'function' && document.getElementById('observer')?.classList.contains('active')) window.loadObserverData();
-      if(typeof window.renderTeacherReflectionRecap === 'function') window.renderTeacherReflectionRecap();
-      if(typeof window.renderTeacherReflectionResults === 'function') window.renderTeacherReflectionResults();
-    } catch(e) { console.warn('[Firebase PLSV] Refresh panel:', e); }
-  }
-  try {
-    if(!window.firebase) throw new Error('Firebase SDK belum termuat. Periksa koneksi internet.');
-    const app = window.firebase.apps.length ? window.firebase.app() : window.firebase.initializeApp(firebaseConfig);
-    db = app.database();
-    window.firebasePLSVDatabase = db;
-    window.firebasePLSVSyncStatus = 'connecting';
-    const sharedRef = db.ref('sharedStorage');
-    sharedRef.on('child_added', snap => applyCloudValue(snap.key, snap.val()), reportSyncError);
-    sharedRef.on('child_changed', snap => applyCloudValue(snap.key, snap.val()), reportSyncError);
-    sharedRef.on('child_removed', snap => applyCloudValue(snap.key, null), reportSyncError);
-    // Seed database only for keys that have no cloud copy yet, preserving existing
-    // local classroom data on first setup. Existing cloud values take precedence.
-    sharedRef.once('value').then(snapshot => {
-      const cloud = snapshot.val() || {};
-      const keys = new Set([...exactSharedKeys]);
-      Object.keys(window.localStorage).forEach(k => { if(isSharedKey(k)) keys.add(k); });
-      keys.forEach(key => {
-        if(Object.prototype.hasOwnProperty.call(cloud, key)) applyCloudValue(key, cloud[key]);
-        else {
-          const localValue = nativeGetItem.call(window.localStorage, key);
-          if(localValue !== null) setCloud(key, localValue);
-        }
-      });
-      window.firebasePLSVSyncStatus = 'connected';
-      console.info('[Firebase PLSV] Data kelas tersambung. Akun lokal tidak disinkronkan.');
-    }).catch(reportSyncError);
-  } catch(error){ reportSyncError(error); }
-})();
-</script>
+<!-- Firebase SDK -->
+
 
 </body>
 <style id="no-dialog-portrait-final">
